@@ -248,14 +248,14 @@ func (tb *Bucket) takeAvailable(now time.Time, count int64) int64 {
 // tokens could have changed in the meantime. This method is intended
 // primarily for metrics reporting and debugging.
 func (tb *Bucket) Available() int64 {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 	return tb.available(tb.clock.Now())
 }
 
 // available is the internal version of available - it takes the current time as
 // an argument to enable easy testing.
 func (tb *Bucket) available(now time.Time) int64 {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
 	tb.adjustavailableTokens(tb.currentTick(now))
 	return tb.availableTokens
 }
