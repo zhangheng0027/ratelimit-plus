@@ -71,6 +71,12 @@ func (bp *BucketPlus) SetControlModel(model ControlModel) {
 	bp.controlModel = model
 }
 
+func (tb *Bucket) SetUpstreamControlModel(model ControlModel) {
+	if tb.bucketPlus != nil {
+		tb.bucketPlus.SetControlModel(model)
+	}
+}
+
 func (bp *BucketPlus) Wait(count int64) {
 	if d := bp.Take(count); d > 0 {
 		time.Sleep(d)
