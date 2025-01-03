@@ -74,6 +74,8 @@ type Bucket struct {
 	latestTick int64
 
 	bucketPlus *BucketPlus
+
+	log *usageLog
 }
 
 // NewBucket returns a new token bucket that fills at the
