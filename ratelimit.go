@@ -67,9 +67,13 @@ type Bucket struct {
 	// waiting for tokens.
 	availableTokens int64
 
+	lastAvailableTokens int64
+
 	// latestTick holds the latest tick for which
 	// we know the number of tokens in the bucket.
 	latestTick int64
+
+	bucketPlus *BucketPlus
 }
 
 // NewBucket returns a new token bucket that fills at the
@@ -167,6 +171,10 @@ func NewBucketWithQuantumAndClock(fillInterval time.Duration, capacity, quantum 
 // Wait takes count tokens from the bucket, waiting until they are
 // available.
 func (tb *Bucket) Wait(count int64) {
+	if tb.bucketPlus != nil {
+		tb.bucketPlus.Wait(count)
+		return
+	}
 	if d := tb.Take(count); d > 0 {
 		tb.clock.Sleep(d)
 	}
@@ -178,6 +186,9 @@ func (tb *Bucket) Wait(count int64) {
 // any tokens have been removed from the bucket
 // If no tokens have been removed, it returns immediately.
 func (tb *Bucket) WaitMaxDuration(count int64, maxWait time.Duration) bool {
+	if tb.bucketPlus != nil {
+		return tb.bucketPlus.WaitMaxDuration(count, maxWait)
+	}
 	d, ok := tb.TakeMaxDuration(count, maxWait)
 	if d > 0 {
 		tb.clock.Sleep(d)
@@ -194,6 +205,9 @@ const infinityDuration time.Duration = 0x7fffffffffffffff
 // Note that if the request is irrevocable - there is no way to return
 // tokens to the bucket once this method commits us to taking them.
 func (tb *Bucket) Take(count int64) time.Duration {
+	if tb.bucketPlus != nil {
+		return tb.bucketPlus.Take(count)
+	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	d, _ := tb.take(tb.clock.Now(), count, infinityDuration)
@@ -210,6 +224,9 @@ func (tb *Bucket) Take(count int64) time.Duration {
 // wait until the tokens are actually available, and reports
 // true.
 func (tb *Bucket) TakeMaxDuration(count int64, maxWait time.Duration) (time.Duration, bool) {
+	if tb.bucketPlus != nil {
+		return tb.bucketPlus.TakeMaxDuration(count, maxWait)
+	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.take(tb.clock.Now(), count, maxWait)
@@ -219,6 +236,9 @@ func (tb *Bucket) TakeMaxDuration(count int64, maxWait time.Duration) (time.Dura
 // bucket. It returns the number of tokens removed, or zero if there are
 // no available tokens. It does not block.
 func (tb *Bucket) TakeAvailable(count int64) int64 {
+	if tb.bucketPlus != nil {
+		return tb.bucketPlus.TakeAvailable(count)
+	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.takeAvailable(tb.clock.Now(), count)
@@ -248,6 +268,9 @@ func (tb *Bucket) takeAvailable(now time.Time, count int64) int64 {
 // tokens could have changed in the meantime. This method is intended
 // primarily for metrics reporting and debugging.
 func (tb *Bucket) Available() int64 {
+	if tb.bucketPlus != nil {
+		return tb.bucketPlus.Available()
+	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	return tb.available(tb.clock.Now())
@@ -320,6 +343,18 @@ func (tb *Bucket) adjustavailableTokens(tick int64) {
 		tb.availableTokens = tb.capacity
 	}
 	return
+}
+
+func (tb *Bucket) lock() {
+	tb.mu.Lock()
+}
+
+func (tb *Bucket) unlock() {
+	tb.mu.Unlock()
+}
+
+func (tb *Bucket) resetTokens(tokens int64) {
+	tb.availableTokens = tokens
 }
 
 // Clock represents the passage of time in a way that

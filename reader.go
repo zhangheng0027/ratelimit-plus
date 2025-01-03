@@ -4,17 +4,19 @@
 
 package ratelimit
 
-import "io"
+import (
+	"io"
+)
 
 type reader struct {
 	r      io.Reader
-	bucket *Bucket
+	bucket BucketI
 }
 
 // Reader returns a reader that is rate limited by
-// the given token bucket. Each token in the bucket
+// the given token BucketI. Each token in the BucketI
 // represents one byte.
-func Reader(r io.Reader, bucket *Bucket) io.Reader {
+func Reader(r io.Reader, bucket BucketI) io.Reader {
 	return &reader{
 		r:      r,
 		bucket: bucket,
@@ -32,13 +34,13 @@ func (r *reader) Read(buf []byte) (int, error) {
 
 type writer struct {
 	w      io.Writer
-	bucket *Bucket
+	bucket BucketI
 }
 
 // Writer returns a reader that is rate limited by
-// the given token bucket. Each token in the bucket
+// the given token BucketI. Each token in the BucketI
 // represents one byte.
-func Writer(w io.Writer, bucket *Bucket) io.Writer {
+func Writer(w io.Writer, bucket BucketI) io.Writer {
 	return &writer{
 		w:      w,
 		bucket: bucket,

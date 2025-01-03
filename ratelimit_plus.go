@@ -17,24 +17,24 @@ const (
 )
 
 type BucketPlus struct {
-	this           interface{ BucketI }
-	upstreamBucket []interface{ BucketI }
+	this           BucketI
+	upstreamBucket []BucketI
 	// 支持上游的并行控制或串行控制
 	controlModel ControlModel
 }
 
-func NewBucketPlusN(upstream interface{ BucketI }, bs ...interface{ BucketI }) {
-	//buckets := make([]*BucketPlus, 0, len(bs))
-	for _, b := range bs {
-		NewBucketPlus(SerialControl, upstream, b)
-
-		//buckets = append(buckets, NewBucketPlus(SerialControl, upstream, b))
-		//return buckets
+func NewBucketPlusN(upstream BucketI, bs ...BucketI) {
+	var plus *BucketPlus
+	for i, b := range bs {
+		if 0 == i {
+			plus = NewBucketPlus(SerialControl, upstream, b)
+		}
+		plus.addUpstream(b)
 	}
 }
 
-func NewBucketPlus(model ControlModel, upstream interface{ BucketI }, b interface{ BucketI }) *BucketPlus {
-	m := make([]interface{ BucketI }, 0, 1)
+func NewBucketPlus(model ControlModel, upstream BucketI, b BucketI) *BucketPlus {
+	m := make([]BucketI, 0, 1)
 	plus := BucketPlus{
 		this:           b,
 		upstreamBucket: append(m, upstream),
@@ -43,32 +43,27 @@ func NewBucketPlus(model ControlModel, upstream interface{ BucketI }, b interfac
 	return &plus
 }
 
-func (bp *BucketPlus) AddUpstream(bs ...interface{ BucketI }) {
-	bp.addUpstream(bs)
-}
-
-func (bp *BucketPlus) addUpstream(bs ...interface{}) {
+func (bp *BucketPlus) AddUpstream(bs ...BucketI) {
 	for _, b := range bs {
-		if tb, ok := b.(interface{ BucketI }); ok {
-			bp.upstreamBucket = append(bp.upstreamBucket, tb)
-		}
+		bp.addUpstream(b)
 	}
 }
 
-func (tb *Bucket) AddUpstream(bs ...interface{ BucketI }) {
-	tb.addUpstream(bs)
+func (bp *BucketPlus) addUpstream(b BucketI) {
+	bp.upstreamBucket = append(bp.upstreamBucket, b)
 }
 
-func (tb *Bucket) addUpstream(bs ...interface{}) {
-	for index, b := range bs {
-		print(index)
-		if t, ok := b.(interface{ BucketI }); ok {
-			if tb.upstreamBucket == nil {
-				tb.upstreamBucket = NewBucketPlus(SerialControl, t, tb)
-			} else {
-				tb.upstreamBucket.addUpstream(&t)
-			}
-		}
+func (tb *Bucket) AddUpstream(bs ...BucketI) {
+	for _, b := range bs {
+		tb.addUpstream(b)
+	}
+}
+
+func (tb *Bucket) addUpstream(up BucketI) {
+	if tb.bucketPlus == nil {
+		tb.bucketPlus = NewBucketPlus(SerialControl, up, tb)
+	} else {
+		tb.bucketPlus.addUpstream(up)
 	}
 }
 
@@ -154,7 +149,7 @@ func (bp *BucketPlus) lock() {
 func (bp *BucketPlus) unlock() {
 	bp.this.unlock()
 	for _, bs := range bp.upstreamBucket {
-		bs.lock()
+		bs.unlock()
 	}
 }
 
@@ -190,6 +185,10 @@ func (tb *Bucket) storeTokens() {
 	tb.lastAvailableTokens = tb.availableTokens
 }
 
+func (tb *Bucket) _getBucketPlus() *BucketPlus {
+	return tb.bucketPlus
+}
+
 func (tb *Bucket) rollbackTokens() {
 	tb.availableTokens = tb.lastAvailableTokens
 }
@@ -221,8 +220,12 @@ func (bp *BucketPlus) _takeUpstream(now time.Time, count int64, maxWait time.Dur
 	for _, bs := range bp.upstreamBucket {
 		var t time.Duration
 		var bo bool
-		if bp, ok := bs.(*BucketPlus); ok {
-			t, bo = bp._takeUpstream(now, count, maxWait)
+		if b, ok := bs.(interface {
+			_takeUpstream(now time.Time, count int64, maxWait time.Duration) (time.Duration, bool)
+		}); ok {
+			t, bo = b._takeUpstream(now, count, maxWait)
+		} else if b1, ok := bs.(*Bucket); ok && b1.bucketPlus != nil {
+			t, bo = b1.bucketPlus.take(now, count, maxWait)
 		} else {
 			t, bo = bs.take(now, count, maxWait)
 		}
@@ -268,8 +271,10 @@ func (bp *BucketPlus) takeAvailableUpstream(now time.Time, count int64) int64 {
 func (bp *BucketPlus) _takeAvailableUpstream(now time.Time, count int64) int64 {
 	for _, bs := range bp.upstreamBucket {
 		var take int64
-		if bp, ok := bs.(*BucketPlus); ok {
-			take = bp._takeAvailableUpstream(now, count)
+		if b, ok := bs.(interface{ _takeAvailableUpstream(time.Time, int64) int64 }); ok {
+			take = b._takeAvailableUpstream(now, count)
+		} else if b1, ok := bs.(*Bucket); ok && b1.bucketPlus != nil {
+			take = b1.bucketPlus.takeAvailable(now, count)
 		} else {
 			take = bs.takeAvailable(now, count)
 		}
