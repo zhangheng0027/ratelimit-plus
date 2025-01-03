@@ -1,6 +1,6 @@
 # ratelimit
 ```go
-import "github.com/zhangheng0027/ratelimitplus"
+import "github.com/zhangheng0027/ratelimit-plus"
 ```
 对 [ratelimit](github.com/juju/ratelimit) 项目进行增强，增加了上游限流控制
 
