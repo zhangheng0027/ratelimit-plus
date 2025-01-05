@@ -167,6 +167,7 @@ func NewBucketWithQuantumAndClock(fillInterval time.Duration, capacity, quantum 
 		capacity:        capacity,
 		quantum:         quantum,
 		availableTokens: capacity,
+		log:             newUsageLog(5),
 	}
 }
 
