@@ -96,19 +96,27 @@ func (bp *BucketPlus) Take(count int64) time.Duration {
 	defer bp.unlock()
 	now := time.Now()
 	take, _ := bp.take(now, count, infinityDuration)
+	bp.usage(now, take, count)
 	return take
 }
 
 func (bp *BucketPlus) TakeMaxDuration(count int64, maxWait time.Duration) (time.Duration, bool) {
 	bp.lock()
 	defer bp.unlock()
-	return bp.take(time.Now(), count, maxWait)
+	now := time.Now()
+	take, b := bp.take(now, count, maxWait)
+	if b {
+		bp.this.usage(now, take, count)
+	}
+	return take, b
 }
 
 func (bp *BucketPlus) TakeAvailable(count int64) int64 {
 	bp.lock()
 	defer bp.unlock()
-	return bp.takeAvailable(time.Now(), count)
+	available := bp.takeAvailable(time.Now(), count)
+	bp.usage(time.Now(), 0, available)
+	return available
 }
 
 func (bp *BucketPlus) takeAvailable(now time.Time, count int64) int64 {

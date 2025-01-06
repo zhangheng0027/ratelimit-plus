@@ -39,5 +39,5 @@ type BucketI interface {
 
 	AddUpstream(bs ...BucketI)
 
-	//ToBucketI() *BucketI
+	usage(now time.Time, d time.Duration, count int64)
 }

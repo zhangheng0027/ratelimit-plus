@@ -22,7 +22,7 @@ func newUsageLog(len int) *usageLog {
 	}
 }
 
-func (log *usageLog) addLog(t time.Time, d time.Duration, count int64) {
+func (log *usageLog) usage(t time.Time, d time.Duration, count int64) {
 	if count <= 0 {
 		return
 	}
@@ -35,7 +35,10 @@ func (log *usageLog) addLog(t time.Time, d time.Duration, count int64) {
 	}
 	if sub != 0 {
 		for i := 0; i < int(sub) && i < log.maxLen; i++ {
-			log.rightIndex = (log.rightIndex + 1) % log.maxLen
+			log.rightIndex = log.rightIndex + 1
+			if log.rightIndex == log.maxLen {
+				log.rightIndex = 0
+			}
 			log.log[log.rightIndex] = 0
 		}
 	}
@@ -50,12 +53,15 @@ func (log *usageLog) addLog(t time.Time, d time.Duration, count int64) {
 	sp := int64(float64(count) / d.Seconds())
 	for i := 0; i < int(ts) && i < log.maxLen; i++ {
 		log.log[log.rightIndex] += sp
-		log.rightIndex = (log.rightIndex + 1) % log.maxLen
+		log.rightIndex = log.rightIndex + 1
+		if log.rightIndex == log.maxLen {
+			log.rightIndex = 0
+		}
 	}
 	log.rightIndex = (log.rightIndex - 1 + log.maxLen) % log.maxLen
 }
 
-func (log *usageLog) getRate(now time.Time) int64 {
+func (log *usageLog) usageRate(now time.Time) int64 {
 	t := now.Unix()
 	if t < log.lastSeconds {
 		return 0
@@ -78,3 +84,27 @@ func (log *usageLog) getRate(now time.Time) int64 {
 	}
 	return sum / 5
 }
+
+func (tb *Bucket) UsageRate() int64 {
+	return tb.log.usageRate(time.Now())
+}
+
+func (tb *Bucket) UsageRateKBS() float64 {
+	return float64(tb.log.usageRate(time.Now())) / kb
+}
+
+func (tb *Bucket) UsageRateMBS() float64 {
+	return float64(tb.log.usageRate(time.Now())) / mb
+}
+
+func (tb *Bucket) usage(now time.Time, d time.Duration, count int64) {
+	tb.log.usage(now, d, count)
+}
+
+func (bp *BucketPlus) usage(now time.Time, d time.Duration, count int64) {
+	bp.this.usage(now, d, count)
+}
+
+const kb = 1024
+const mb = kb * 1024
+const gb = mb * 1024

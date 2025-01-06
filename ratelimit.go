@@ -213,7 +213,9 @@ func (tb *Bucket) Take(count int64) time.Duration {
 	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
-	d, _ := tb.take(tb.clock.Now(), count, infinityDuration)
+	now := tb.clock.Now()
+	d, _ := tb.take(now, count, infinityDuration)
+	tb.log.usage(now, d, count)
 	return d
 }
 
@@ -232,7 +234,12 @@ func (tb *Bucket) TakeMaxDuration(count int64, maxWait time.Duration) (time.Dura
 	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
-	return tb.take(tb.clock.Now(), count, maxWait)
+	now := tb.clock.Now()
+	take, b := tb.take(now, count, maxWait)
+	if b {
+		tb.log.usage(now, take, count)
+	}
+	return take, b
 }
 
 // TakeAvailable takes up to count immediately available tokens from the
@@ -244,7 +251,10 @@ func (tb *Bucket) TakeAvailable(count int64) int64 {
 	}
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
-	return tb.takeAvailable(tb.clock.Now(), count)
+	now := tb.clock.Now()
+	available := tb.takeAvailable(now, count)
+	tb.log.usage(now, 0, available)
+	return available
 }
 
 // takeAvailable is the internal version of TakeAvailable - it takes the
